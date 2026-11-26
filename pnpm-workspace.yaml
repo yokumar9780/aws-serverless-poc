@@ -1,2 +1,9 @@
+# pnpm v11 supply-chain security: build scripts are blocked by default.
+# esbuild needs its postinstall script to download the platform-specific
+# binary (e.g. @esbuild/win32-x64). Without this, NodejsFunction bundling
+# fails at both `cdk synth` and during CDK assertion tests.
+#
+# To approve a new package: `pnpm approve-builds <package-name>`
+# Or add it here manually and run `pnpm install`.
 allowBuilds:
-  esbuild: set this to true or false
+  esbuild: true

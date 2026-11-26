@@ -706,6 +706,85 @@ curl -X PUT "$API_URL/orders/{orderId}/status" \
 - [ ] CloudWatch Logs show structured JSON (Powertools format)
 - [ ] `pnpm test` passes for unit tests and CDK tests
 
+### Viewing Lambda logs in CloudWatch
+
+Each Lambda function writes structured JSON logs (via Powertools Logger) to its own CloudWatch Log Group. Here's how to find and read them.
+
+**Log group naming convention:**
+
+| Log group | Handler |
+|---|---|
+| `/aws/lambda/CreateOrder` | POST /orders |
+| `/aws/lambda/GetOrder` | GET /orders/{orderId} |
+| `/aws/lambda/ListOrders` | GET /orders?customerId=X |
+| `/aws/lambda/UpdateOrderStatus` | PUT /orders/{orderId}/status |
+| `/aws/lambda/GetInventory` | GET /inventory/{productId} |
+| `/aws/lambda/UpdateInventory` | PUT /inventory/{productId} |
+
+**Via AWS Console:**
+1. Go to **CloudWatch** → **Logs** → **Log groups** (make sure you're in `eu-west-1`)
+2. Search for `/aws/lambda/CreateOrder` (or whichever handler)
+3. Click the **latest log stream** — most recent invocations are at the top
+4. Each log entry is structured JSON from Powertools with fields like `service`, `message`, `requestId`, `orderId`, `customerId`, `cold_start`, etc.
+
+**Filtering across all streams in a log group:**
+
+Click **Search all log streams** and use CloudWatch filter patterns:
+```
+{ $.message = "Order created" }
+{ $.orderId = "a1cf9b1e-b8fb-433a-b63f-0411ce7403f7" }
+{ $.level = "ERROR" }
+```
+
+**Via CLI (real-time tail):**
+```bash
+aws logs tail /aws/lambda/ListOrders --region eu-west-1 --follow
+```
+The `--follow` flag streams new logs as they arrive — useful while testing endpoints in another terminal.
+
+**Understanding log stream names:**
+
+Log streams are named like:
+```
+2026/11/26/[$LATEST]29ac3c0e85b94ebb9010e5795a1a4ac3
+```
+
+The format is `YYYY/MM/DD/[version]/random-id`:
+- **`[$LATEST]`** — the current deployed code (unpublished version). This is the default when deploying with CDK and is expected for this POC.
+- **`[1]`, `[2]`, etc.** — would appear if you publish numbered Lambda versions (used for canary deployments, weighted traffic shifting, rollbacks). Not needed until production deployment strategies.
+
+Each execution environment (container) gets its own log stream. If Lambda scales to 3 concurrent instances, you'll see 3 streams for the same date. This is normal — Lambda creates a new execution environment for each concurrent invocation.
+
+### Testing endpoints on Windows (PowerShell)
+
+The curl examples in this README use bash syntax. On Windows PowerShell, use `curl.exe` (not `curl`, which is an alias for `Invoke-WebRequest`) and backtick for line continuation:
+
+```powershell
+$API_URL = "https://<api-id>.execute-api.eu-west-1.amazonaws.com/dev"
+
+# Seed inventory
+curl.exe -X PUT "$API_URL/inventory/prod-1" `
+  -H "Content-Type: application/json" `
+  -d "{""productName"":""Widget"",""quantity"":100,""price"":9.99}"
+
+# Create order
+curl.exe -X POST "$API_URL/orders" `
+  -H "Content-Type: application/json" `
+  -d "{""productId"":""prod-1"",""quantity"":2}"
+
+# List orders
+curl.exe "$API_URL/orders?customerId=anonymous"
+```
+
+Or use `Invoke-RestMethod` which handles JSON more naturally:
+```powershell
+Invoke-RestMethod -Method PUT -Uri "$API_URL/inventory/prod-1" `
+  -ContentType "application/json" `
+  -Body '{"productName":"Widget","quantity":100,"price":9.99}'
+```
+
+> **Tip:** Postman works well on Windows and avoids all PowerShell quoting issues. Import the API URL and test endpoints with a GUI.
+
 ---
 
 ## Phase 3 — Cognito Authentication & Authorization

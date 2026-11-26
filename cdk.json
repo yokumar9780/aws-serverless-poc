@@ -1,5 +1,8 @@
 {
+  "// app": "Entry point for `cdk synth` and `cdk deploy`. ts-node runs bin/app.ts directly — no compile step needed. --prefer-ts-exts ensures .ts files take priority over .js when both exist.",
   "app": "npx ts-node --prefer-ts-exts bin/app.ts",
+
+  "// watch": "Config for `cdk watch` — hot-deploys on file changes during development. Excludes non-source files to avoid unnecessary redeploys.",
   "watch": {
     "include": ["**"],
     "exclude": [
@@ -14,13 +17,31 @@
       "test"
     ]
   },
+
+  "// context": [
+    "CDK feature flags and project-level settings. These opt into recommended",
+    "behaviors that CDK doesn't enable by default for backward compatibility."
+  ],
   "context": {
+    "// recognizeLayerVersion": "Enables automatic detection of Lambda Layer versions to avoid unnecessary updates.",
     "@aws-cdk/aws-lambda:recognizeLayerVersion": true,
+
+    "// checkSecretUsage": "Warns when secrets are used in ways that might expose them (e.g. in CloudFormation outputs).",
     "@aws-cdk/core:checkSecretUsage": true,
+
+    "// target-partitions": "Restricts resource generation to the standard AWS partition. Set to ['aws', 'aws-cn'] if deploying to China regions.",
     "@aws-cdk/core:target-partitions": ["aws"],
+
+    "// minimizePolicies": "Collapses redundant IAM policy statements into fewer statements. Reduces CloudFormation template size.",
     "@aws-cdk/aws-iam:minimizePolicies": true,
+
+    "// validateSnapshotRemovalPolicy": "Ensures you explicitly set a removal policy on stateful resources (tables, buckets) instead of relying on the default (RETAIN).",
     "@aws-cdk/core:validateSnapshotRemovalPolicy": true,
+
+    "// serverAccessLogsUseBucketPolicy": "Uses bucket policy (not ACLs) for S3 server access logging. ACLs are deprecated as of April 2023.",
     "@aws-cdk/aws-s3:serverAccessLogsUseBucketPolicy": true,
+
+    "// bootstrapQualifier": "Custom qualifier for the CDK bootstrap stack. Avoids collisions if multiple CDK projects share the same AWS account. Default is 'hnb659fds'.",
     "@aws-cdk/core:bootstrapQualifier": "poc2026"
   }
 }

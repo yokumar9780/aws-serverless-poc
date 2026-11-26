@@ -2,13 +2,44 @@
   "name": "aws-serverless-poc",
   "version": "0.1.0",
   "private": true,
+
+  "//": {
+    "about": "Order Management System — AWS serverless POC built with CDK (TypeScript). See PLAN.md for the full phased architecture.",
+
+    "scripts": {
+      "build":  "Compiles CDK infra code (lib/, bin/) via tsc. Lambda handler code (src/) is NOT compiled here — it's bundled by esbuild at deploy time via NodejsFunction.",
+      "watch":  "Same as build but re-compiles on file changes. Useful during CDK development.",
+      "test":   "Runs Jest test suites (CDK assertion tests in test/infra/, handler unit tests in test/unit/).",
+      "cdk":    "Shortcut to run CDK CLI commands, e.g. `pnpm cdk synth`, `pnpm cdk deploy`."
+    },
+
+    "dependencies": {
+      "@aws-lambda-powertools/commons + logger": "Structured logging with correlation IDs, cold start detection, and JSON output. commons is the shared base required by all Powertools packages. Both MUST be pinned to the same version — a mismatch breaks esbuild ESM resolution.",
+      "@aws-sdk/client-dynamodb + lib-dynamodb":  "DynamoDB Document Client for Lambda handlers. Externalized from esbuild bundles (externalModules: ['@aws-sdk/*']) because Lambda's Node.js 20 runtime already ships AWS SDK v3.",
+      "aws-cdk-lib + constructs":                 "CDK v2 core library and construct base. Used in lib/stacks/ to define all AWS infrastructure. NOT bundled into Lambdas — only used at synth/deploy time.",
+      "uuid":                                      "Generates UUIDs for orderId, paymentId. Used in Lambda handlers at runtime.",
+      "zod":                                       "Runtime input validation in Lambda handlers. Validates business rules that API Gateway JSON Schema models can't express (e.g. status transitions, quantity > 0)."
+    },
+
+    "devDependencies": {
+      "@types/*":          "TypeScript type definitions. @types/aws-lambda provides APIGatewayProxyEvent/Result types for handler signatures.",
+      "aws-cdk":           "CDK CLI tool. Runs cdk synth, cdk deploy, cdk destroy. Separate from aws-cdk-lib (the library).",
+      "esbuild":           "JavaScript bundler used by CDK's NodejsFunction to compile and tree-shake each Lambda's TypeScript into a single minified JS file. Its postinstall script must be approved in pnpm-workspace.yaml (pnpm v11 supply-chain security).",
+      "jest + ts-jest":    "Test runner for CDK assertion tests and handler unit tests. ts-jest lets Jest run TypeScript directly without a separate compile step.",
+      "ts-node":           "Runs TypeScript directly in Node.js. Required by CDK CLI — cdk.json uses 'npx ts-node' to execute bin/app.ts without compiling first.",
+      "typescript":        "TypeScript compiler. Used by the 'build' script to compile CDK infra code (lib/, bin/) and by ts-jest for tests."
+    }
+  },
+
   "scripts": {
     "build": "tsc",
     "watch": "tsc -w",
     "test": "jest",
     "cdk": "cdk"
   },
+
   "dependencies": {
+    "@aws-lambda-powertools/commons": "2.14.0",
     "@aws-lambda-powertools/logger": "2.14.0",
     "@aws-sdk/client-dynamodb": "3.738.0",
     "@aws-sdk/lib-dynamodb": "3.738.0",
@@ -17,6 +48,7 @@
     "uuid": "11.1.0",
     "zod": "3.24.2"
   },
+
   "devDependencies": {
     "@types/aws-lambda": "^8.10.164",
     "@types/jest": "29.5.14",
