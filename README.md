@@ -842,7 +842,28 @@ ordersResource.addMethod('POST', new LambdaIntegration(createOrderFn), {
 - `GET /orders` filters by the authenticated user's `sub` claim
 - Add `GET /health` endpoint with no auth (health check)
 
-### Step 3.4 — Test the auth flow
+### Step 3.4 — Deploy
+
+```bash
+pnpm run build
+pnpm test
+pnpm cdk synth
+pnpm cdk diff
+# Both stacks changed: Cognito in SharedStack, authorizer in ApplicationStack
+pnpm cdk deploy --all --require-approval broadening
+```
+
+Grab the Cognito output values for testing:
+```bash
+# Get User Pool ID and Client ID from stack outputs
+aws cloudformation describe-stacks --stack-name SharedStack \
+  --query "Stacks[0].Outputs[?ExportName=='UserPoolId'].OutputValue" --output text --region eu-west-1
+
+aws cloudformation describe-stacks --stack-name SharedStack \
+  --query "Stacks[0].Outputs[?ExportName=='UserPoolClientId'].OutputValue" --output text --region eu-west-1
+```
+
+### Step 3.5 — Test the auth flow
 
 ```bash
 USER_POOL_ID="<from stack output>"
@@ -867,7 +888,7 @@ TOKEN=$(aws cognito-idp initiate-auth \
   --auth-flow USER_PASSWORD_AUTH \
   --auth-parameters USERNAME=user@example.com,PASSWORD="MyP@ssw0rd" \
   --region eu-west-1 \
-  --query 'AuthenticationResult.AccessToken' --output text)
+  --query 'AuthenticationResult.IdToken' --output text)
 
 # Call API with token
 curl -H "Authorization: Bearer $TOKEN" "$API_URL/orders"
@@ -1786,6 +1807,28 @@ git add . && git commit -m "Test PR" && git push -u origin test-pr
 - [ ] OIDC auth works (no long-lived credentials in secrets)
 - [ ] Failed tests prevent deployment
 - [ ] `cdk synth` catches CDK errors before deploy
+
+---
+
+## Deployment Commands — Quick Reference
+
+| Phase | Stacks Changed | Command |
+|-------|---------------|---------|
+| 1 | SharedStack | `pnpm cdk deploy SharedStack` |
+| 2 | ApplicationStack (new) | `pnpm cdk deploy --all` |
+| 3 | SharedStack + ApplicationStack | `pnpm cdk deploy --all --require-approval broadening` |
+| 4 | ApplicationStack | `pnpm cdk deploy ApplicationStack` |
+| 5 | ApplicationStack | `pnpm cdk deploy ApplicationStack` |
+| 6 | ApplicationStack | `pnpm cdk deploy ApplicationStack` |
+| 7 | ApplicationStack | `pnpm cdk deploy ApplicationStack --require-approval broadening` |
+| 8 | ApplicationStack | `pnpm cdk deploy ApplicationStack` |
+| 9 | ApplicationStack | `pnpm cdk deploy ApplicationStack` |
+| 10 | Both (X-Ray config) | `pnpm cdk deploy --all` |
+| 11 | CI/CD (automated) | Push to `main` branch triggers deploy |
+
+> Always run `pnpm run build && pnpm test && pnpm cdk synth` before deploying. Use `pnpm cdk diff` to preview changes.
+
+> `--require-approval broadening` prompts when IAM or security-group changes are introduced. Use `never` for unattended POC deploys.
 
 ---
 

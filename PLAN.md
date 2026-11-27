@@ -362,7 +362,7 @@ API Gateway Model Validation          Lambda Zod Validation
 | Cognito User Pool (not Identity Pool) | User Pool = authentication (who are you). Identity Pool = authorization for AWS resources (we don't need this) |
 | Extract customerId from JWT claims | Don't trust client-sent customerId in request body — derive it from the verified token |
 | Password policy enforcement | Cognito handles complexity rules, rotation, brute-force protection — don't build this yourself |
-| Access token (not ID token) for API auth | Access tokens are designed for API authorization. ID tokens are for the client application |
+| ID token for REST API CognitoUserPoolsAuthorizer | REST API's COGNITO_USER_POOLS authorizer validates the `aud` claim, which only exists on ID tokens. Access tokens have `client_id` instead and get rejected with 401. For HTTP API JWT authorizers, access tokens work |
 
 **What you'll learn:**
 - Cognito User Pool is a managed user directory. Handles signup, signin, MFA, password policies, token issuance. Zero server management.
@@ -396,7 +396,7 @@ API Gateway Model Validation          Lambda Zod Validation
 2. User → Confirm Email → Cognito (activates account)
 3. User → Sign In → Cognito → Returns { IdToken, AccessToken, RefreshToken }
 
-4. User → GET /orders + "Authorization: Bearer <AccessToken>"
+4. User → GET /orders + "Authorization: Bearer <IdToken>"
        → API Gateway
        → JWT Authorizer validates token signature using Cognito public keys (JWKS)
            ├── Invalid/Expired → 401 Unauthorized (Lambda NEVER called, $0 cost)

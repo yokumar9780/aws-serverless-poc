@@ -1,5 +1,6 @@
 import * as cdk from 'aws-cdk-lib';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
+import * as cognito from 'aws-cdk-lib/aws-cognito';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
@@ -9,14 +10,15 @@ import * as path from 'path';
 /**
  * Props accepted by ApplicationStack.
  *
- * SharedStack owns the stateful DynamoDB tables. It exposes them as ITable
- * references so this stack can grant permissions and read table names without
- * hard-coding ARNs. CDK resolves these as CloudFormation cross-stack imports.
+ * SharedStack owns the stateful DynamoDB tables and Cognito User Pool.
+ * It exposes them as references so this stack can grant permissions and
+ * configure authorization without hard-coding ARNs.
  */
 export interface ApplicationStackProps extends cdk.StackProps {
   orderTable: dynamodb.ITable;
   inventoryTable: dynamodb.ITable;
   paymentTable: dynamodb.ITable;
+  userPool: cognito.IUserPool;
 }
 
 /**
@@ -34,8 +36,8 @@ export class ApplicationStack extends cdk.Stack {
     super(scope, id, props);
 
     // paymentTable is accepted for future phases (Phase 7 — Step Functions).
-    // Destructure only what Phase 2 needs right now.
-    const { orderTable, inventoryTable } = props;
+    // Destructure only what this phase needs right now.
+    const { orderTable, inventoryTable, userPool } = props;
 
     // ──────────────────────────────────────────────────────────────────────
     // Shared Lambda configuration
@@ -196,7 +198,7 @@ export class ApplicationStack extends cdk.Stack {
 
     this.api = new apigateway.RestApi(this, 'OrderManagementApi', {
       restApiName: 'Order Management API',
-      description: 'REST API for Order Management System (Phase 2)',
+      description: 'REST API for Order Management System (Phase 3 — Cognito auth)',
       deployOptions: {
         stageName: 'dev',
         // Stage-level throttling prevents runaway costs and protects Lambdas.
@@ -213,6 +215,30 @@ export class ApplicationStack extends cdk.Stack {
         allowHeaders: ['Content-Type', 'Authorization'],
       },
     });
+
+    // ──────────────────────────────────────────────────────────────────────
+    // Cognito JWT Authorizer (Phase 3)
+    //
+    // CognitoUserPoolsAuthorizer validates the JWT token in the
+    // Authorization header BEFORE the Lambda is invoked. If the token is
+    // invalid or expired, API Gateway returns 401 — no Lambda cost incurred.
+    //
+    // On valid tokens, the decoded claims are passed to Lambda in
+    // event.requestContext.authorizer.claims. The handler extracts the
+    // `sub` claim as the authenticated user's identity (customerId).
+    // ──────────────────────────────────────────────────────────────────────
+    const cognitoAuthorizer = new apigateway.CognitoUserPoolsAuthorizer(this, 'CognitoAuthorizer', {
+      cognitoUserPools: [userPool],
+      authorizerName: 'cognito-authorizer',
+      identitySource: 'method.request.header.Authorization',
+    });
+
+    // Shared method options for all authenticated endpoints.
+    // Every route (except /health and OPTIONS) uses this authorizer.
+    const authMethodOptions: apigateway.MethodOptions = {
+      authorizer: cognitoAuthorizer,
+      authorizationType: apigateway.AuthorizationType.COGNITO,
+    };
 
     // ──────────────────────────────────────────────────────────────────────
     // Request validation — two-layer strategy
@@ -298,35 +324,54 @@ export class ApplicationStack extends cdk.Stack {
     // passes the entire HTTP request as the event object and returns the
     // Lambda's { statusCode, headers, body } response directly to the client.
     //
+    // All routes are protected by the Cognito authorizer except /health
+    // and CORS preflight (OPTIONS). Invalid/expired tokens → 401 before
+    // Lambda runs.
+    //
     // Route structure:
+    //   GET    /health                    → Health check (no auth)
     //   POST   /orders                    → CreateOrder
-    //   GET    /orders?customerId=X       → ListOrders
+    //   GET    /orders                    → ListOrders (uses JWT sub as customerId)
     //   GET    /orders/{orderId}          → GetOrder
     //   PUT    /orders/{orderId}/status   → UpdateOrderStatus
     //   GET    /inventory/{productId}     → GetInventory
     //   PUT    /inventory/{productId}     → UpdateInventory
     // ──────────────────────────────────────────────────────────────────────
 
+    // GET /health — unauthenticated health check endpoint.
+    // Useful for load balancers, monitoring tools, and verifying the API is up.
+    const healthResource = this.api.root.addResource('health');
+    healthResource.addMethod('GET', new apigateway.MockIntegration({
+      integrationResponses: [{
+        statusCode: '200',
+        responseTemplates: {
+          'application/json': JSON.stringify({ status: 'healthy', timestamp: '$context.requestTime' }),
+        },
+      }],
+      requestTemplates: {
+        'application/json': '{"statusCode": 200}',
+      },
+    }), {
+      methodResponses: [{ statusCode: '200' }],
+      authorizationType: apigateway.AuthorizationType.NONE,
+    });
+
     // /orders — collection resource
     const ordersResource = this.api.root.addResource('orders');
 
-    // POST /orders — body validated by createOrderModel before Lambda runs
+    // POST /orders — body validated by createOrderModel before Lambda runs.
+    // customerId is extracted from the JWT sub claim (not from the request body).
     ordersResource.addMethod('POST', new apigateway.LambdaIntegration(createOrderFn), {
+      ...authMethodOptions,
       requestValidator,
       requestModels: { 'application/json': createOrderModel },
     });
 
-    // GET /orders?customerId=X — requires customerId query parameter.
-    // A separate validator checks query params (not body) so API Gateway
-    // returns 400 if customerId is missing, before Lambda is invoked.
+    // GET /orders — lists orders for the authenticated user.
+    // customerId comes from the JWT sub claim, not from query parameters.
+    // The query string validator is no longer needed — auth is mandatory.
     ordersResource.addMethod('GET', new apigateway.LambdaIntegration(listOrdersFn), {
-      requestParameters: { 'method.request.querystring.customerId': true },
-      requestValidator: new apigateway.RequestValidator(this, 'QueryStringValidator', {
-        restApi: this.api,
-        requestValidatorName: 'validate-query-params',
-        validateRequestParameters: true,
-        validateRequestBody: false,
-      }),
+      ...authMethodOptions,
     });
 
     // /orders/{orderId} — single-order resource; {orderId} is a path parameter
@@ -334,7 +379,9 @@ export class ApplicationStack extends cdk.Stack {
     const orderIdResource = ordersResource.addResource('{orderId}');
 
     // GET /orders/{orderId} — no body validation needed for GET
-    orderIdResource.addMethod('GET', new apigateway.LambdaIntegration(getOrderFn));
+    orderIdResource.addMethod('GET', new apigateway.LambdaIntegration(getOrderFn), {
+      ...authMethodOptions,
+    });
 
     // /orders/{orderId}/status — sub-resource for status updates.
     // Using a sub-resource (not PATCH on the order) makes the intent explicit
@@ -343,6 +390,7 @@ export class ApplicationStack extends cdk.Stack {
 
     // PUT /orders/{orderId}/status — body validated by updateOrderStatusModel
     orderStatusResource.addMethod('PUT', new apigateway.LambdaIntegration(updateOrderStatusFn), {
+      ...authMethodOptions,
       requestValidator,
       requestModels: { 'application/json': updateOrderStatusModel },
     });
@@ -354,10 +402,13 @@ export class ApplicationStack extends cdk.Stack {
     const productIdResource = inventoryResource.addResource('{productId}');
 
     // GET /inventory/{productId} — no body validation needed
-    productIdResource.addMethod('GET', new apigateway.LambdaIntegration(getInventoryFn));
+    productIdResource.addMethod('GET', new apigateway.LambdaIntegration(getInventoryFn), {
+      ...authMethodOptions,
+    });
 
     // PUT /inventory/{productId} — body validated by updateInventoryModel
     productIdResource.addMethod('PUT', new apigateway.LambdaIntegration(updateInventoryFn), {
+      ...authMethodOptions,
       requestValidator,
       requestModels: { 'application/json': updateInventoryModel },
     });

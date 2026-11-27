@@ -1,4 +1,5 @@
 import * as cdk from 'aws-cdk-lib';
+import * as cognito from 'aws-cdk-lib/aws-cognito';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import { Template, Match } from 'aws-cdk-lib/assertions';
 import { ApplicationStack } from '../../lib/stacks/application-stack';
@@ -35,10 +36,17 @@ describe('ApplicationStack', () => {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
+    // Create a stub Cognito User Pool for the test
+    const userPool = new cognito.UserPool(stubStack, 'UserPool', {
+      selfSignUpEnabled: true,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
+
     const stack = new ApplicationStack(app, 'TestApplicationStack', {
       orderTable,
       inventoryTable,
       paymentTable,
+      userPool,
     });
     template = Template.fromStack(stack);
   });
@@ -104,6 +112,10 @@ describe('ApplicationStack', () => {
   // ─── API Routes ───
 
   test('defines the expected API resources', () => {
+    // /health
+    template.hasResourceProperties('AWS::ApiGateway::Resource', {
+      PathPart: 'health',
+    });
     // /orders
     template.hasResourceProperties('AWS::ApiGateway::Resource', {
       PathPart: 'orders',
@@ -126,35 +138,70 @@ describe('ApplicationStack', () => {
     });
   });
 
-  test('creates POST method on /orders', () => {
+  // ─── Cognito Authorizer (Phase 3) ───
+
+  test('creates a Cognito User Pools authorizer', () => {
+    template.hasResourceProperties('AWS::ApiGateway::Authorizer', {
+      Name: 'cognito-authorizer',
+      Type: 'COGNITO_USER_POOLS',
+      IdentitySource: 'method.request.header.Authorization',
+    });
+  });
+
+  test('POST /orders uses Cognito authorizer', () => {
     template.hasResourceProperties('AWS::ApiGateway::Method', {
       HttpMethod: 'POST',
-      AuthorizationType: 'NONE', // Phase 3 adds Cognito authorizer
+      AuthorizationType: 'COGNITO_USER_POOLS',
     });
   });
 
-  test('creates GET method on /orders', () => {
+  test('GET /orders uses Cognito authorizer', () => {
+    // Find GET methods with COGNITO auth (there are multiple GET methods)
+    const methods = template.findResources('AWS::ApiGateway::Method', {
+      Properties: {
+        HttpMethod: 'GET',
+        AuthorizationType: 'COGNITO_USER_POOLS',
+      },
+    });
+    // GET /orders, GET /orders/{orderId}, GET /inventory/{productId} = 3
+    expect(Object.keys(methods).length).toBe(3);
+  });
+
+  test('PUT methods use Cognito authorizer', () => {
+    const methods = template.findResources('AWS::ApiGateway::Method', {
+      Properties: {
+        HttpMethod: 'PUT',
+        AuthorizationType: 'COGNITO_USER_POOLS',
+      },
+    });
+    // PUT /orders/{orderId}/status, PUT /inventory/{productId} = 2
+    expect(Object.keys(methods).length).toBe(2);
+  });
+
+  test('GET /health does NOT require authorization', () => {
+    // The health check mock integration method has no auth
     template.hasResourceProperties('AWS::ApiGateway::Method', {
       HttpMethod: 'GET',
+      AuthorizationType: 'NONE',
+      Integration: Match.objectLike({
+        Type: 'MOCK',
+      }),
     });
   });
 
-  test('creates PUT method on /orders/{orderId}/status', () => {
+  test('CORS preflight OPTIONS methods do NOT require authorization', () => {
     template.hasResourceProperties('AWS::ApiGateway::Method', {
-      HttpMethod: 'PUT',
+      HttpMethod: 'OPTIONS',
+      AuthorizationType: 'NONE',
     });
   });
 
   // ─── Request Validators ───
 
-  test('creates request validators', () => {
+  test('creates request body validator', () => {
     template.hasResourceProperties('AWS::ApiGateway::RequestValidator', {
       Name: 'validate-request-body',
       ValidateRequestBody: true,
-    });
-    template.hasResourceProperties('AWS::ApiGateway::RequestValidator', {
-      Name: 'validate-query-params',
-      ValidateRequestParameters: true,
     });
   });
 
@@ -178,8 +225,6 @@ describe('ApplicationStack', () => {
   // ─── IAM — Least Privilege ───
 
   test('grants read-only DynamoDB access to GET handlers', () => {
-    // GetOrder and ListOrders should have read-only policies on Order table
-    // We check that at least one policy has only dynamodb:Get*/Query/Scan (no Put/Update/Delete)
     template.hasResourceProperties('AWS::IAM::Policy', {
       PolicyDocument: {
         Statement: Match.arrayWith([

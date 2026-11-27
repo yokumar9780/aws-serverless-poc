@@ -30,36 +30,39 @@ const env = {
 };
 
 // ──────────────────────────────────────────────────────────────────────
-// SharedStack — stateful resources (DynamoDB tables, Cognito in Phase 3)
+// SharedStack — stateful resources (DynamoDB tables, Cognito User Pool)
 //
-// This stack has a separate lifecycle from compute. Tables use
-// RemovalPolicy.DESTROY (POC only) so `cdk destroy` cleans up everything.
-// In production you'd use RETAIN to protect data from accidental deletion.
+// This stack has a separate lifecycle from compute. Tables and the user
+// pool use RemovalPolicy.DESTROY (POC only) so `cdk destroy` cleans up
+// everything. In production you'd use RETAIN to protect data and users.
 //
-// SharedStack exposes table references (orderTable, inventoryTable,
-// paymentTable) as public properties for other stacks to consume.
+// SharedStack exposes table references and Cognito User Pool as public
+// properties for other stacks to consume.
 // ──────────────────────────────────────────────────────────────────────
 const sharedStack = new SharedStack(app, 'SharedStack', {
   env,
-  description: 'Order Management System — DynamoDB tables and shared stateful resources',
+  description: 'Order Management System — DynamoDB tables, Cognito User Pool, shared stateful resources',
 });
 
 // ──────────────────────────────────────────────────────────────────────
 // ApplicationStack — stateless compute and integrations
 //
-// Contains the REST API, Lambda handlers, and all integration resources
-// added in later phases (SQS, EventBridge, Step Functions, S3, SNS).
+// Contains the REST API, Lambda handlers, Cognito authorizer, and all
+// integration resources added in later phases (SQS, EventBridge, Step
+// Functions, S3, SNS).
 //
-// It receives DynamoDB table references from SharedStack. CDK turns these
-// into CloudFormation cross-stack imports (Fn::ImportValue) so the tables'
-// names and ARNs flow through without hard-coding.
+// It receives DynamoDB table references and the Cognito User Pool from
+// SharedStack. CDK turns these into CloudFormation cross-stack imports
+// (Fn::ImportValue) so the names, ARNs, and IDs flow through without
+// hard-coding.
 // ──────────────────────────────────────────────────────────────────────
 const appStack = new ApplicationStack(app, 'ApplicationStack', {
   env,
-  description: 'Order Management System — API Gateway, Lambda handlers, integrations',
+  description: 'Order Management System — API Gateway, Lambda handlers, Cognito auth, integrations',
   orderTable: sharedStack.orderTable,
   inventoryTable: sharedStack.inventoryTable,
   paymentTable: sharedStack.paymentTable,
+  userPool: sharedStack.userPool,
 });
 
 // Explicit dependency ensures CDK deploys SharedStack before ApplicationStack.
