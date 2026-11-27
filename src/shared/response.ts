@@ -50,3 +50,11 @@ export function notFound(message: string, requestId?: string): APIGatewayProxyRe
 export function serverError(message = 'Internal server error', requestId?: string): APIGatewayProxyResult {
   return error(500, message, requestId);
 }
+
+export function unauthorized(message = 'Unauthorized', requestId?: string): APIGatewayProxyResult {
+  return error(401, message, requestId);
+}
+
+export function forbidden(message = 'Forbidden', requestId?: string): APIGatewayProxyResult {
+  return error(403, message, requestId);
+}

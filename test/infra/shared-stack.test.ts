@@ -128,6 +128,84 @@ describe('SharedStack', () => {
     }
   });
 
+  // ─── Cognito User Pool (Phase 3) ───
+
+  test('creates a Cognito User Pool', () => {
+    template.resourceCountIs('AWS::Cognito::UserPool', 1);
+  });
+
+  test('User Pool has correct configuration', () => {
+    template.hasResourceProperties('AWS::Cognito::UserPool', {
+      UserPoolName: 'order-management-user-pool',
+      // Self-signup enabled (no AdminCreateUserConfig restriction)
+      AdminCreateUserConfig: {
+        AllowAdminCreateUserOnly: false,
+      },
+      // Email verification required
+      AutoVerifiedAttributes: ['email'],
+      // Password policy: 8+ chars, upper, lower, digits, no symbols required
+      Policies: {
+        PasswordPolicy: {
+          MinimumLength: 8,
+          RequireUppercase: true,
+          RequireLowercase: true,
+          RequireNumbers: true,
+          RequireSymbols: false,
+        },
+      },
+      // Email as sign-in alias
+      UsernameAttributes: ['email'],
+      // Email is required
+      Schema: Match.arrayWith([
+        Match.objectLike({
+          Name: 'email',
+          Required: true,
+          Mutable: true,
+        }),
+      ]),
+      // Account recovery via email
+      AccountRecoverySetting: {
+        RecoveryMechanisms: Match.arrayWith([
+          Match.objectLike({
+            Name: 'verified_email',
+            Priority: 1,
+          }),
+        ]),
+      },
+    });
+  });
+
+  test('User Pool has DeletionPolicy set to Delete (POC)', () => {
+    const pools = template.findResources('AWS::Cognito::UserPool');
+    const poolIds = Object.keys(pools);
+    expect(poolIds).toHaveLength(1);
+    expect(pools[poolIds[0]].DeletionPolicy).toBe('Delete');
+  });
+
+  // ─── Cognito User Pool Client ───
+
+  test('creates a User Pool Client', () => {
+    template.resourceCountIs('AWS::Cognito::UserPoolClient', 1);
+  });
+
+  test('User Pool Client has correct configuration', () => {
+    template.hasResourceProperties('AWS::Cognito::UserPoolClient', {
+      ClientName: 'order-management-client',
+      // Public client — no secret generated
+      GenerateSecret: false,
+      // Auth flows: USER_PASSWORD_AUTH for CLI testing, USER_SRP_AUTH for secure flow
+      ExplicitAuthFlows: Match.arrayWith([
+        'ALLOW_USER_PASSWORD_AUTH',
+        'ALLOW_USER_SRP_AUTH',
+        'ALLOW_REFRESH_TOKEN_AUTH',
+      ]),
+      // Token validity
+      AccessTokenValidity: 1,   // 1 hour
+      IdTokenValidity: 1,       // 1 hour
+      RefreshTokenValidity: 30, // 30 days
+    });
+  });
+
   // ─── Cross-stack Exports ───
 
   test('exports table names and ARNs', () => {
@@ -148,6 +226,18 @@ describe('SharedStack', () => {
     });
     template.hasOutput('PaymentTableArn', {
       Export: { Name: 'PaymentTableArn' },
+    });
+  });
+
+  test('exports Cognito User Pool ID, Client ID, and ARN', () => {
+    template.hasOutput('UserPoolId', {
+      Export: { Name: 'UserPoolId' },
+    });
+    template.hasOutput('UserPoolClientId', {
+      Export: { Name: 'UserPoolClientId' },
+    });
+    template.hasOutput('UserPoolArn', {
+      Export: { Name: 'UserPoolArn' },
     });
   });
 });

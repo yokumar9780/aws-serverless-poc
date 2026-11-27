@@ -3,6 +3,7 @@ import { PutCommand, GetCommand } from '@aws-sdk/lib-dynamodb';
 import { v4 as uuidv4 } from 'uuid';
 import { docClient } from '../../shared/dynamo-client';
 import { createLogger } from '../../shared/logger';
+import { getAuthenticatedUser } from '../../shared/auth';
 import { validate, createOrderSchema, ValidationError } from '../../shared/validator';
 import { success, created, badRequest, notFound, serverError } from '../../shared/response';
 import type { Order } from '../../types/order';
@@ -16,12 +17,20 @@ const INVENTORY_TABLE = process.env.INVENTORY_TABLE_NAME!;
  * POST /orders
  * Creates a new order with status PENDING.
  * Validates input with Zod, looks up product price from Inventory table.
+ *
+ * customerId is extracted from the authenticated user's JWT `sub` claim —
+ * any customerId in the request body is ignored. This guarantees the order
+ * is linked to the verified identity, preventing impersonation.
  */
 export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
   const requestId = event.requestContext.requestId;
   logger.appendKeys({ requestId });
 
   try {
+    // Extract authenticated user from Cognito JWT claims
+    const user = getAuthenticatedUser(event);
+    logger.appendKeys({ userId: user.userId });
+
     const body = JSON.parse(event.body || '{}');
     const input = validate(createOrderSchema, body);
 
@@ -41,7 +50,7 @@ export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const now = new Date().toISOString();
     const order: Order = {
       orderId: uuidv4(),
-      customerId: body.customerId || 'anonymous', // Phase 3 replaces with JWT subclaim
+      customerId: user.userId, // From JWT sub claim — never from request body
       productId: input.productId,
       quantity: input.quantity,
       status: 'PENDING',
