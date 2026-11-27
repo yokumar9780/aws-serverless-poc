@@ -431,3 +431,7 @@ This document lists every technology, service, pattern, and tool selected for th
 | Auth (CI/CD) | OIDC | Access keys | No stored secrets. Temporary credentials. Security best practice |
 | Validation | Zod | Joi | TypeScript-first. Type inference. Smaller bundle |
 | Idempotency | Powertools | Manual conditional writes | Battle-tested. TTL cleanup. Less code |
+| Frontend framework | Next.js 15 (App Router) | Remix / plain React | SSR + API routes. Standalone output for Lambda. Largest ecosystem |
+| Frontend hosting | Lambda Web Functions | Amplify Hosting | Serverless, scale to zero, learning value, new AWS capability |
+| Frontend UI library | MUI (Material UI) 6 | Tailwind CSS | Complete component set (DataGrid, Stepper, Dialog). Faster development. Consistent design |
+| Frontend deploy tool | `aws lambda-web` CLI | CDK (CfnResource) | Officially documented path. CDK L2 constructs not available yet. See [ADR-001](./docs/adr/adr-001-frontend-deployment.md) |
