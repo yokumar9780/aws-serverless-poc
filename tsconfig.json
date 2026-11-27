@@ -1,30 +1,50 @@
 {
   "compilerOptions": {
-    "target": "ES2022",
-    "module": "commonjs",
-    "lib": ["ES2022"],
-    "declaration": true,
+    // --- Language & Output ---
+    "target": "ES2022",                       // Lambda Node.js 20 supports ES2022 features natively
+    "module": "commonjs",                     // CDK and ts-node require CommonJS modules
+    "lib": ["ES2022"],                        // Type definitions matching the target
+    "outDir": "./cdk.out/ts",                 // Compiled JS goes here (only CDK infra code, not Lambda handlers)
+    "rootDir": ".",                            // Source root for path resolution
+    "declaration": true,                       // Emit .d.ts files (useful if stacks are consumed by other packages)
+
+    // --- Strict Type Checking ---
+    // All strict checks enabled — catches bugs at compile time rather than runtime
     "strict": true,
-    "noImplicitAny": true,
-    "strictNullChecks": true,
-    "noImplicitThis": true,
-    "alwaysStrict": true,
-    "noUnusedLocals": false,
-    "noUnusedParameters": false,
-    "noImplicitReturns": true,
-    "noFallthroughCasesInSwitch": false,
-    "inlineSourceMap": true,
-    "inlineSources": true,
-    "experimentalDecorators": true,
-    "strictPropertyInitialization": false,
-    "outDir": "./cdk.out/ts",
-    "rootDir": ".",
-    "typeRoots": ["./node_modules/@types"],
-    "resolveJsonModule": true,
-    "esModuleInterop": true,
-    "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true
+    "noImplicitAny": true,                    // Every variable must have a type (no silent 'any')
+    "strictNullChecks": true,                 // null and undefined are distinct types — forces explicit handling
+    "noImplicitThis": true,                   // 'this' must have an explicit type in functions
+    "alwaysStrict": true,                     // Emit "use strict" in every file
+    "strictPropertyInitialization": false,     // Disabled — CDK construct properties are set in constructor body, not initializers
+
+    // --- Code Quality ---
+    "noImplicitReturns": true,                // Every code path in a function must return a value
+    "noUnusedLocals": false,                  // Allowed — WIP code often has unused vars temporarily
+    "noUnusedParameters": false,              // Allowed — same reason
+    "noFallthroughCasesInSwitch": false,      // Switch fallthrough is intentional in some CDK patterns
+
+    // --- Module Resolution ---
+    "resolveJsonModule": true,                // Allows importing .json files (e.g. package.json for version info)
+    "esModuleInterop": true,                  // Enables default imports from CommonJS modules (e.g. `import path from 'path'`)
+    "skipLibCheck": true,                     // Skip type checking of .d.ts files — faster builds, avoids conflicts between @types packages
+    "forceConsistentCasingInFileNames": true,  // Prevents `import './Foo'` when the file is `foo.ts` — catches cross-platform bugs
+
+    // --- Debugging ---
+    "inlineSourceMap": true,                  // Embeds source maps in the compiled JS for debuggable stack traces
+    "inlineSources": true,                    // Includes original TS source in source maps
+
+    // --- Decorators ---
+    "experimentalDecorators": true,           // Required by some CDK constructs and Powertools annotations
+
+    // --- Type Roots ---
+    "typeRoots": ["./node_modules/@types"]    // Only look for @types packages here (standard location)
   },
+
+  // --- What tsc compiles ---
+  // Only CDK infrastructure code (bin/, lib/) and tests (test/).
+  // Lambda handler code in src/ is EXCLUDED — it's bundled separately by
+  // esbuild via NodejsFunction at deploy time. This keeps the tsc build
+  // fast and avoids duplicate compilation.
   "include": [
     "bin/**/*.ts",
     "lib/**/*.ts",

@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@aws-lambda-powertools/commons':
+        specifier: 2.14.0
+        version: 2.14.0
       '@aws-lambda-powertools/logger':
         specifier: 2.14.0
         version: 2.14.0
@@ -30,6 +33,9 @@ importers:
         specifier: 3.24.2
         version: 3.24.2
     devDependencies:
+      '@types/aws-lambda':
+        specifier: ^8.10.164
+        version: 8.10.164
       '@types/jest':
         specifier: 29.5.14
         version: 29.5.14
@@ -88,8 +94,8 @@ packages:
   '@aws-crypto/util@5.2.0':
     resolution: {integrity: sha512-4RkU9EsI6ZpBve5fseQlGNUWKMa1RLPQ1dnjnQoe07ldfIzcsGb5hC5W0Dm7u423KWzawlrpbjXBrXCEv9zazQ==}
 
-  '@aws-lambda-powertools/commons@2.37.0':
-    resolution: {integrity: sha512-YT+yg8u8EMU5szM0howYP7j3r/fIzDjuf8A8NWu8IK3rCHin+7q4A2b1vqkKQJRnQHFm6deSYVtf403eCIEFDg==}
+  '@aws-lambda-powertools/commons@2.14.0':
+    resolution: {integrity: sha512-tJPVanYElAo0WymoQ0pyELpHdGCz9u7ERKdCwHv4abtJFY2VVoIMLtsUs8xUczV2hjIWl0+ye9CGYCBazKYB3Q==}
 
   '@aws-lambda-powertools/logger@2.14.0':
     resolution: {integrity: sha512-gumsz+1yGBLB3zPB6Qlsw4Vse9SRgsg2qAy1Ocv+o7tE8AZiPslFFG1EldpNzz1hoGBzsdIKgoRlrUIdW8Pumg==}
@@ -210,10 +216,6 @@ packages:
     peerDependenciesMeta:
       aws-crt:
         optional: true
-
-  '@aws/lambda-invoke-store@0.3.0':
-    resolution: {integrity: sha512-sl4Bm6yiMNYrZKkqqDFWN0UfnWhlS8ivKxrYl+6t0gCLrqr8y3B2IqZZbFRkfaVVp7C/baApyh71P+LeE1A2sQ==}
-    engines: {node: '>=18.0.0'}
 
   '@babel/code-frame@7.29.7':
     resolution: {integrity: sha512-Aup7aUOfpbAUg2ROOJN6Iw5f9DMBlzu0mIkm/malLQFN/YQgO48wCj0Kxa3sEHJvPVFg7siR+qRInwXd2qhQKw==}
@@ -787,6 +789,9 @@ packages:
 
   '@tsconfig/node16@1.0.4':
     resolution: {integrity: sha512-vxhUy4J8lyeyinH7Azl1pdd43GJhZH/tP2weN8TntQblOY+A0XbT8DJk1/oCPuOOyg/Ja757rG0CgHcWC8OfMA==}
+
+  '@types/aws-lambda@8.10.164':
+    resolution: {integrity: sha512-XOnrazWcOd6yWPnR7DxqCBPPYciDjHq+NN8LPwwqBCJNXLyPJgKo47fZpJ113+oyAn9Zti0Cf6H4k6yPcE3WFg==}
 
   '@types/babel__core@7.20.5':
     resolution: {integrity: sha512-qoQprZvz5wQFJwMDqeseRXWv3rqMvhgpbXFfVyWhbx9X47POIA6i/+dXefEmZKoAgOaTdaIgNSMqMIU61yRyzA==}
@@ -1821,13 +1826,11 @@ snapshots:
       '@smithy/util-utf8': 2.3.0
       tslib: 2.9.1
 
-  '@aws-lambda-powertools/commons@2.37.0':
-    dependencies:
-      '@aws/lambda-invoke-store': 0.3.0
+  '@aws-lambda-powertools/commons@2.14.0': {}
 
   '@aws-lambda-powertools/logger@2.14.0':
     dependencies:
-      '@aws-lambda-powertools/commons': 2.37.0
+      '@aws-lambda-powertools/commons': 2.14.0
       lodash.merge: 4.6.2
 
   '@aws-sdk/client-dynamodb@3.738.0':
@@ -2176,8 +2179,6 @@ snapshots:
       '@smithy/node-config-provider': 4.6.2
       '@smithy/types': 4.20.0
       tslib: 2.9.1
-
-  '@aws/lambda-invoke-store@0.3.0': {}
 
   '@babel/code-frame@7.29.7':
     dependencies:
@@ -2838,6 +2839,8 @@ snapshots:
   '@tsconfig/node14@1.0.3': {}
 
   '@tsconfig/node16@1.0.4': {}
+
+  '@types/aws-lambda@8.10.164': {}
 
   '@types/babel__core@7.20.5':
     dependencies:
